@@ -29,17 +29,17 @@ class Profile:
 
     def get_utag(self):
         utag = re.findall(r'utag_data = (.+?\});', str(self.soup))
-        return "{}".format(utag[0]) if utag else ''
+        return utag[0].replace('""', '"') if utag else ''
 
     def get_title(self):
         try:
-            return self.soup.find('head').find('title').get_text().strip()
+            return self.soup.find('head').find('title').get_text().replace(';', ' ').strip()
         except Exception:
             return ''
 
     def get_meta_desc(self):
         try:
-            return self.soup.find('head').find('meta', {'name': 'description'}).get('content').strip()
+            return self.soup.find('head').find('meta', {'name': 'description'}).get('content').replace(';', ' ').strip()
         except Exception:
             return ''
 

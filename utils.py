@@ -72,7 +72,7 @@ def dump_data_to_csv(data: Union[List, Dict], full_path: str):
 
     try:
         with open(full_path, 'a+') as f:
-            writer = csv.DictWriter(f, delimiter=',', fieldnames=config.CSV_HEADERS)
+            writer = csv.DictWriter(f, fieldnames=config.CSV_HEADERS)
             if not os.path.isfile(full_path):
                 writer.writeheader()
             if isinstance(data, dict):
@@ -80,7 +80,7 @@ def dump_data_to_csv(data: Union[List, Dict], full_path: str):
                 logger.info(f'{data.get("id")} saved')
             elif isinstance(data, list):
                 for o in data:
-                    writer.writerow(data)
+                    writer.writerow(o)
     except Exception as e:
         logger.error(f'Unable to save data - {e}')
 

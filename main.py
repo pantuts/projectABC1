@@ -68,17 +68,19 @@ def time_gap():
 
 if '__name__==__main__':
     p = argparse.ArgumentParser()
-    p.add_argument('--skip', action='store_true')
+    p.add_argument('--skip-ids', help='Skip just scraped IDs and do not compare data.', action='store_true')
+    p.add_argument('--skip-data', help='Do not parse previous data', action='store_true')
     args = p.parse_args()
-    skip = args.skip
+    skip_data = args.skip_data
+    skip_ids = args.skip_ids or skip_data
 
     TOTAL_PROFILES_COUNT = None
     CURRENT_PROFILES_COUNT = 0
     CURRENT_PAGE = 1
 
-    EXISTING_DATA = get_json_data()
+    EXISTING_DATA = [] if skip_data else get_json_data()
     LISTING_IDS = get_existing_ids(EXISTING_DATA)
-    CURRENT_IDS = LISTING_IDS.copy() if skip else []
+    CURRENT_IDS = LISTING_IDS.copy() if skip_ids else []
 
     # array of objects
     MAIL_PRICE_CHANGES = []
