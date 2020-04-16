@@ -143,5 +143,6 @@ env/
 files/
 files_*
 logs/
+cache/
 *.sublime-project
 *.sublime-workspace

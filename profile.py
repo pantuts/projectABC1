@@ -29,7 +29,7 @@ class Profile:
 
     def get_utag(self):
         utag = re.findall(r'utag_data = (.+?\});', str(self.soup))
-        return utag[0].replace('""', '"') if utag else ''
+        return utag[0] if utag else ''
 
     def get_title(self):
         try:
@@ -52,7 +52,7 @@ class Profile:
 
     def get_price(self):
         try:
-            return self.soup.find('span', class_='info-data-price').get_text().replace('€', '').strip()
+            return ''.join(self.soup.find('span', class_='info-data-price').get_text().replace('€', '').strip().split('.'))
         except Exception:
             return ''
 
@@ -60,7 +60,7 @@ class Profile:
         try:
             p = self.soup.find('span', class_='pricedown').get_text().replace('€', '').split()
             if len(p) == 2:
-                return p[0].strip(), p[1].strip()
+                return ''.join(p[0].strip().split('.')), p[1].strip()
             return '', ''
         except Exception:
             return '', ''
