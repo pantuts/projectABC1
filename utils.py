@@ -32,8 +32,6 @@ RETRIES = 0
 
 
 def setup_logger(name: str, level=logging.DEBUG):
-    global logger
-
     daiquiri.setup(level=level, outputs=(
         daiquiri.output.Stream(sys.stdout),
         daiquiri.output.RotatingFile(logfile, formatter=jsonlogger.JsonFormatter(
@@ -231,7 +229,7 @@ def zip_folder(d: str, fname: str):
 
     if os.path.exists(d):
         try:
-            make_archive(fname, 'zip', d)
+            make_archive(f'/tmp/{fname}', 'zip', d)
             logger.info('/tmp/{} - Archive created'.format(fname))
             return True
         except Exception as e:

@@ -59,34 +59,56 @@ def get_ids():
 
 
 def get_json_data():
-    latest = sorted(glob.glob(os.path.join(config.DATA_LOC, now, '*.csv')), key=os.path.getmtime)
-    if latest:
-        latest = latest[-1]
-        return csv_to_json(latest)
-    return []
+    return csv_to_json(os.path.join(config.DATA_LOC, now, f'{now}_Listings.csv'))
 
 
 def get_existing_ids(data: List):
     return [i.get('id') for i in data]
 
 
-def single_request_profile(_id):
+def single_request_profile(_id, to_csv=False):
     url = f'{config.PROFILE_URL}/{_id}/'
-    p_soup = get_soup(url)
-    if p_soup:
-        profile = Profile(url, p_soup)
+    p_soup, profile = get_profile_data(url)
+    if p_soup and profile:
         data = profile.data
         utag = data.get('utag')
         del data['utag']
+
+        removed = listing_removed(p_soup)
+        if not data.get('price') and removed:
+            data['status'] = 'removed'
+
         cache_source(str(p_soup), os.path.join(config.CACHE_LOC, now, f'{data.get("id")}.html'))
         dump_data_to_json(utag, os.path.join(config.DATA_LOC, now, f'{data.get("id")}.json'))
-        logger.info(f'{_id} saved')
+        if to_csv:
+            dump_data_to_csv(data, os.path.join(config.DATA_LOC, now, CSV_FNAME))
+        else:
+            logger.info(f'{_id} saved')
+    time_gap()
+
+
+def listing_removed(soup):
+    return 'no está publicado en idealista' in str(soup)
+
+
+def get_profile_data(url, use_cache=False): # TODO: use cache for soup
+    p_soup = get_soup(url)
+    if p_soup:
+        removed = listing_removed(p_soup)
+        profile = Profile(url, p_soup)
+        data = profile.data
+        if not data.get('price') and not removed:
+            time_gap()
+            return get_profile_data(url)
+        return p_soup, profile
+    return None, None
 
 
 if '__name__==__main__':
     p = argparse.ArgumentParser()
     p.add_argument('--id', help='Get data from this ID only.', type=str)
-    p.add_argument('--file', help='Get data from list.', type=str)
+    p.add_argument('--file', help='Get data from list, only json and cache.', type=str)
+    p.add_argument('--with-csv', help='Write to csv. Accompanying --file arg.', action='store_true')
     p.add_argument('--skip-ids', help='Skip recently scraped IDs and do not compare data.', action='store_true')
     p.add_argument('--skip-data', help='Do not parse previous data', action='store_true')
     p.add_argument('--utag', help='Save utag only', action='store_true')
@@ -95,6 +117,7 @@ if '__name__==__main__':
     args = p.parse_args()
     p_id = args.id
     ids_file = args.file
+    with_csv = args.with_csv
     skip_data = args.skip_data
     skip_ids = args.skip_ids or skip_data
     utag_only = args.utag
@@ -104,13 +127,13 @@ if '__name__==__main__':
     if test:
         exit()
     elif p_id:
-        single_request_profile(p_id)
+        single_request_profile(p_id, with_csv)
         exit()
     elif ids_file:
         with open(ids_file, 'r') as f:
             IDS = [i.strip() for i in f.readlines() if i.strip()]
             for _id in IDS:
-                single_request_profile(_id)
+                single_request_profile(_id, with_csv)
         os.remove(ids_file)
         exit()
     else:
@@ -121,6 +144,7 @@ if '__name__==__main__':
         EXISTING_DATA = [] if skip_data else get_json_data()
         LISTING_IDS = get_existing_ids(EXISTING_DATA)
         CURRENT_IDS = LISTING_IDS.copy() if skip_ids else []
+        REMOVED_IDS = []
 
         # array of objects
         MAIL_PRICE_CHANGES = []
@@ -148,13 +172,13 @@ if '__name__==__main__':
 
                         time_gap()
 
-                        p_soup = get_soup(url)
-                        if p_soup:
-
-                            profile = Profile(url, p_soup)
+                        p_soup, profile = get_profile_data(url)
+                        if p_soup and profile:
                             data = profile.data
                             utag = data.get('utag')
                             del data['utag']
+
+                            removed = listing_removed(p_soup)
 
                             cache_source(str(p_soup), os.path.join(config.CACHE_LOC, now, f'{data.get("id")}.html'))
 
@@ -162,17 +186,21 @@ if '__name__==__main__':
                                 logger.error('Profile parse error {}'.format(url))
                                 continue
 
-                            if _id in LISTING_IDS:
-                                pc = price_changed(data, EXISTING_DATA)
-                                if pc:
-                                    data['status'] = 'price updated'
-                                    logger.info(f'{_id} price changed')
-                                    MAIL_PRICE_CHANGES.append(data)
+                            if not data.get('price') and removed:
+                                REMOVED_IDS.append(_id)
+                                EXISTING_DATA.append(data)
                             else:
-                                if LISTING_IDS and not skip_ids:
-                                    data['status'] = 'new listing'
-                                    logger.info(f'{_id} new listing')
-                                    MAIL_NEW_LISTINGS.append(data)
+                                if _id in LISTING_IDS:
+                                    pc = price_changed(data, EXISTING_DATA)
+                                    if pc:
+                                        data['status'] = 'price updated'
+                                        logger.info(f'{_id} price changed')
+                                        MAIL_PRICE_CHANGES.append(data)
+                                else:
+                                    if LISTING_IDS and not skip_ids:
+                                        data['status'] = 'new listing'
+                                        logger.info(f'{_id} new listing')
+                                        MAIL_NEW_LISTINGS.append(data)
 
                             if utag_only:
                                 dump_data_to_json(utag, os.path.join(config.DATA_LOC, now, f'{data.get("id")}.json'))
@@ -193,7 +221,7 @@ if '__name__==__main__':
             CURRENT_PAGE = CURRENT_PAGE + 1
             time_gap()
 
-        removed = list(filter(lambda _id: _id not in CURRENT_IDS, LISTING_IDS))
+        removed = list(filter(lambda _id: _id not in CURRENT_IDS, LISTING_IDS)).extend(REMOVED_IDS)
         _removed = list(filter(lambda obj: obj.get('id') in removed, EXISTING_DATA))
         for r in _removed:
             r['status'] = 'removed'
